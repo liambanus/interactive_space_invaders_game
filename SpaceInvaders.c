@@ -1,6 +1,6 @@
 // SpaceInvaders.c
 // Runs on LM4F120/TM4C123
-// Jonathan Valvano and Daniel Valvano
+// Jonathan Valvano and Daniel Valvano feat liambanus
 // This is a starter project for the edX Lab 15
 // In order for other students to play your game
 // 1) You must leave the hardware configuration as defined
