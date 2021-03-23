@@ -62,7 +62,7 @@ void Timer2_Init(unsigned long period);
 void Delay100ms(unsigned long count); // time delay in 0.1 seconds
 unsigned long TimerCount;
 unsigned long Semaphore;
-
+void Move_ply(int i, unsigned long adc_in);
 
 // *************************** Images ***************************
 // enemy ship that starts at the top of the screen (arms/mouth closed)
@@ -308,7 +308,7 @@ const unsigned char Laser1[] = {
 struct State {
   unsigned long x;      // x coordinate
   unsigned long y;      // y coordinate
-  const unsigned char *image[2]; // two pointers to images
+  const unsigned char *image[3]; // two pointers to images
   long life;            // 0=dead, 1=alive
 };         
 typedef struct State STyp;
@@ -322,26 +322,66 @@ void Init(void){ int i;
     Enemy[i].life = 1;
    }
 }
+
+STyp player[1];
+void Init_player(void){ int i=0;
+  //for(i=0;i<4;i++){
+    player[i].x = 32;
+    player[i].y = 47;
+    player[i].image[0] = PlayerShip0;
+    player[i].image[1] = BigExplosion0;
+		player[i].image[2] = BigExplosion1;
+    player[i].life = 3;
+}
+//random enemy gen should say if length of enemy struct is < eg 4; generate a new enemy
 void Move(void){ int i;
   for(i=0;i<4;i++){
-    if(Enemy[i].x < 72){
+    if(Enemy[i].x < 72){//if they aren't about to move off screen
       Enemy[i].x += 1; // move to right
     }else{
       Enemy[i].life = 0;
     }
   }
 }
+
+void Move_ply(int i, unsigned long adc_in){ 
+		// read adc and move ship accordingly
+   player[0].x += 1;
+	
+	/*if(player[i].x < 72 && player[i].x >0){//if they aren't about to move off screen
+      Enemy[i].x += 1; // move to right
+    }else{
+      Enemy[i].life = 0;
+    }*/
+  }
+
 unsigned long FrameCount=0;
 void Draw(void){ int i;
   Nokia5110_ClearBuffer();
-  for(i=0;i<4;i++){
+	//ldb
+	if(player[0].life > 0){
+    // Nokia5110_PrintBMP(32,47, player[0].image[0], 0); //player[0].image[0], Enemy[1].image[FrameCount]
+     Nokia5110_PrintBMP(player[0].x, player[0].y, player[0].image[0], 0); //player[0].image[0], Enemy[1].image[FrameCount]
+
+	}
+	Nokia5110_DisplayBuffer();//ldb
+  for(i=0;i<3;i++){
     if(Enemy[i].life > 0){
      Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, Enemy[i].image[FrameCount], 0);
+    // Nokia5110_PrintBMP(32, 47, PlayerShip0,0); //player[0].image[0], Enemy[1].image[FrameCount]
+
+			/* This function takes a
+// bitmap in the previously described format and puts its image data in the proper 
+// location in the buffer so the image will appear on the screen after the next call to
+//   Nokia5110_DisplayBuffer();*/
     }
   }
   Nokia5110_DisplayBuffer();      // draw buffer
   FrameCount = (FrameCount+1)&0x01; // 0,1,0,1,...
 }
+/*Timer0A (16/32-bit) -> IRQ=#19 (page 104) ? PRI4, bits 31-29 (pages152-153)+EN0 bit19(Pg142)
+DAC output should be done in Timer0A_Handler()look at Lab13, where sound
+is generated using SysTick timer. Will be similar, but now using Timer0A.*/
 
 int main(void){ int AnyLife = 1; int i;
   TExaS_Init(NoLCD_NoScope);  // set system clock to 80 MHz
@@ -363,14 +403,21 @@ int main(void){ int AnyLife = 1; int i;
   Nokia5110_PrintBMP(64, ENEMY10H - 1, SmallEnemy30PointA, 0);
   Nokia5110_DisplayBuffer();   // draw buffer
 
-  Delay100ms(50);              // delay 5 sec at 80 MHz
+  //Delay100ms(50);              // delay 5 sec at 80 MHz
 
   Init();
+	Init_player();
   Timer2_Init(80000000/30);  // 30 Hz
+	while(1){
+		Draw();
+		Move_ply(1,4096);
+  }
+	
   while(AnyLife){
     while(Semaphore == 0){};
     Semaphore = 0; // runs at 30 Hz
     AnyLife = 0;
+		Semaphore =1;
     for(i=0; i<4 ; i++){
       AnyLife |= Enemy[i].life;
     }
@@ -387,6 +434,7 @@ int main(void){ int AnyLife = 1; int i;
   Nokia5110_OutUDec(1234);
   Nokia5110_SetCursor(0, 0); // renders screen
   while(1){
+		Draw();
   }
 
 }
