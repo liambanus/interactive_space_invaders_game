@@ -360,7 +360,7 @@ void Init_laser(void){ int i= num_lasers++;
 
 //wip		
 void dirty_array(STyp ptr, int i){
-	if( &ptr == &Enemy[0]){
+	if( &ptr == &Enemy[i]){
 	i++;
 }}
 //random enemy gen should say if length of enemy struct is < eg 4; generate a new enemy
@@ -423,7 +423,7 @@ void Draw(void){ int i, j;
 			else{Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, Enemy[i].image[FrameCount], 0);
 			}}
 		//else{dirty_array(enemy_ptr, i);}//wip needs to accept ptr to array and index
-		else{dirty_array(Enemy[0], i);}//better to pass a ptr but sher look
+		else{dirty_array(Enemy[i], i);}//better to pass a ptr but sher look
 		// Nokia5110_PrintBMP(32, 47, PlayerShip0,0); //player[0].image[0], Enemy[1].image[FrameCount]
 
 			/*dis_buf takes a bitmap in the previously described format and puts its image data in the proper 
