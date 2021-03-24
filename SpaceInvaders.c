@@ -63,6 +63,7 @@ void Delay100ms(unsigned long count); // time delay in 0.1 seconds
 unsigned long TimerCount;
 unsigned long Semaphore;
 void Move_ply(int i, unsigned long adc_in);
+void fire_laser();
 
 // *************************** Images ***************************
 // enemy ship that starts at the top of the screen (arms/mouth closed)
@@ -305,6 +306,12 @@ const unsigned char Laser1[] = {
 #define PLAYERW     ((unsigned char)PlayerShip0[18])
 #define PLAYERH     ((unsigned char)PlayerShip0[22])
 
+
+void fire_laser(){
+//47-height of ship is where to start
+//movement should be done in ISR	
+}
+
 struct State {
   unsigned long x;      // x coordinate
   unsigned long y;      // y coordinate
@@ -313,6 +320,10 @@ struct State {
 };         
 typedef struct State STyp;
 STyp Enemy[4];
+STyp *enemy_ptr = Enemy;//wip this points to first element, not whole array
+//its size is one element of the array (i think), below should be size x4 but throws an error
+//want to check if enemy_ptr = Enemy[0] then the function knows to operate on Enemy array
+//STyp enemy_ptr = &Enemy;
 void Init(void){ int i;
   for(i=0;i<4;i++){
     Enemy[i].x = 20*i;
@@ -333,6 +344,25 @@ void Init_player(void){ int i=0;
 		player[i].image[2] = BigExplosion1;
     player[i].life = 3;
 }
+
+STyp laser[19];
+unsigned long num_lasers = 0;
+void Init_laser(void){ int i= num_lasers++;
+  //for(i=0;i<4;i++){
+		if (num_lasers<20){
+    laser[i].x = (player[0].x+PLAYERW)/2;
+    laser[i].y = 47-PLAYERH;
+    laser[i].image[0] = Laser0;
+		laser[i].life = 1;
+    //player[i].image[1] = BigExplosion0;
+		//player[i].image[2] = BigExplosion1;
+		}}
+
+//wip		
+void dirty_array(STyp ptr, int i){
+	if( &ptr == &Enemy[0]){
+	i++;
+}}
 //random enemy gen should say if length of enemy struct is < eg 4; generate a new enemy
 void Move(void){ int i;
   for(i=0;i<4;i++){
@@ -344,19 +374,23 @@ void Move(void){ int i;
   }
 }
 
+void Move_laser(int i){ 
+		// read adc and move ship accordingly
+  for(i=0;i <= num_lasers;i++){ 
+	laser[i].y -= 1;}}
 void Move_ply(int i, unsigned long adc_in){ 
 		// read adc and move ship accordingly
-   player[0].x += 1;
+   player[0].x += 1;}
 	
 	/*if(player[i].x < 72 && player[i].x >0){//if they aren't about to move off screen
       Enemy[i].x += 1; // move to right
     }else{
       Enemy[i].life = 0;
     }*/
-  }
+  
 
 unsigned long FrameCount=0;
-void Draw(void){ int i;
+void Draw(void){ int i, j;
   Nokia5110_ClearBuffer();
 	//ldb
 	if(player[0].life > 0){
@@ -364,17 +398,37 @@ void Draw(void){ int i;
      Nokia5110_PrintBMP(player[0].x, player[0].y, player[0].image[0], 0); //player[0].image[0], Enemy[1].image[FrameCount]
 
 	}
-	Nokia5110_DisplayBuffer();//ldb
-  for(i=0;i<3;i++){
+	//Nokia5110_DisplayBuffer();//ldb
+  
+	//ldb possible issue with 0 length array of structs etc
+	if(num_lasers > 0){
+		for(j=0; j<= num_lasers;j++){
+		Nokia5110_PrintBMP(laser[j].x, laser[j].y, laser[j].image[0], 0);}
+	}
+	
+	//if ( i >= Enemy[i].x && i <= Enemy[i].x+ENEMY20W )
+	//&& (laser[i].x+LASERW)/2)
+	
+	//td this should enumerate through all elements of enemy arr
+	// else statement that catches lives = 0 should trigger deletion
+	for(i=0;i<3;i++){
     if(Enemy[i].life > 0){
-     Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, Enemy[i].image[FrameCount], 0);
-    // Nokia5110_PrintBMP(32, 47, PlayerShip0,0); //player[0].image[0], Enemy[1].image[FrameCount]
+			if(laser[0].y-LASERH == Enemy[i].y && (Enemy[i].x+ENEMY20W) >= laser[0].x && laser[0].x >= Enemy[i].x ){
+				Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, SmallExplosion0, 0);
+				Enemy[i].life--;
+				laser[i].life--;}
+			//if(laser[i].y-LASERH <= Enemy[i].y && (Enemy[i].x+ENEMY20W) >= Enemy[i].x && laser[i].x <= laser[i].x ){ 
+				//if( (Enemy[i].x+ENEMY20W) >= Enemy[i].x && laser[i].x <= laser[i].x ) {
+				//		Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, SmallExplosion0, 0);
+			else{Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, Enemy[i].image[FrameCount], 0);
+			}}
+		//else{dirty_array(enemy_ptr, i);}//wip needs to accept ptr to array and index
+		else{dirty_array(Enemy[0], i);}//better to pass a ptr but sher look
+		// Nokia5110_PrintBMP(32, 47, PlayerShip0,0); //player[0].image[0], Enemy[1].image[FrameCount]
 
-			/* This function takes a
-// bitmap in the previously described format and puts its image data in the proper 
+			/*dis_buf takes a bitmap in the previously described format and puts its image data in the proper 
 // location in the buffer so the image will appear on the screen after the next call to
-//   Nokia5110_DisplayBuffer();*/
-    }
+*/
   }
   Nokia5110_DisplayBuffer();      // draw buffer
   FrameCount = (FrameCount+1)&0x01; // 0,1,0,1,...
@@ -407,11 +461,14 @@ int main(void){ int AnyLife = 1; int i;
 
   Init();
 	Init_player();
+	Init_laser();
   Timer2_Init(80000000/30);  // 30 Hz
 	while(1){
 		Draw();
 		Move_ply(1,4096);
-  }
+		Move_laser(0);//change to move all lasers and void input?
+		//Init_laser();
+	}
 	
   while(AnyLife){
     while(Semaphore == 0){};
