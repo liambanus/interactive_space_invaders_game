@@ -50,11 +50,42 @@
 // 1*R resistor DAC bit 3 on PB3 (most significant bit)
 // LED on PB4
 // LED on PB5
-
 #include "..//tm4c123gh6pm.h"
 #include "Nokia5110.h"
 #include "Random.h"
 #include "TExaS.h"
+#include "ADC.h"
+
+void PortBEF_Init(void){ volatile unsigned long delay;
+  //SYSCTL_RCGC2_R |= 0x00000020;      // 1) F clock
+  //delay = SYSCTL_RCGC2_R;            // delay to allow clock to stabilize
+  SYSCTL_RCGC2_R |= 0x32; // 1) B E+F
+    delay = SYSCTL_RCGC2_R; // 2) no need to unlock
+	
+// fire button connected to PE0
+// special weapon fire button connected to PE1	
+ 
+GPIO_PORTE_AMSEL_R &= ~0x03; // 3) disable analog function on PE1-0
+GPIO_PORTE_PCTL_R &= ~0x000000FF; // 4) enable regular GPIO
+GPIO_PORTE_DIR_R &= ~0x03; // 5) inputs on PE1-0 i.e. =0
+GPIO_PORTE_AFSEL_R &= ~0x03; // 6) regular function on PE1-0
+GPIO_PORTE_DEN_R |= 0x03; // 7) enable digital on PE1-0
+ 
+GPIO_PORTB_AMSEL_R &= ~0x3F; // 3) disable analog function on PB5-0
+GPIO_PORTB_PCTL_R &= ~0x000000FF; // 4) enable regular GPIO
+GPIO_PORTB_DIR_R |= 0x3F; // 5) outputs on PB5-0
+GPIO_PORTB_AFSEL_R &= ~0x3F; // 6) regular function on PB1-0
+GPIO_PORTB_DEN_R |= 0x3F; // 7) enable digital on PB5-0
+}
+
+
+
+
+
+
+
+
+
 
 void DisableInterrupts(void); // Disable interrupts
 void EnableInterrupts(void);  // Enable interrupts
@@ -62,8 +93,12 @@ void Timer2_Init(unsigned long period);
 void Delay100ms(unsigned long count); // time delay in 0.1 seconds
 unsigned long TimerCount;
 unsigned long Semaphore;
+unsigned long A = (1024*4000)/4095;
 void Move_ply(int i, unsigned long adc_in);
 void fire_laser();
+unsigned long Convert(unsigned long sample);
+unsigned long ADCdata; 
+
 
 // *************************** Images ***************************
 // enemy ship that starts at the top of the screen (arms/mouth closed)
@@ -319,18 +354,37 @@ struct State {
   long life;            // 0=dead, 1=alive
 };         
 typedef struct State STyp;
-STyp Enemy[4];
-STyp *enemy_ptr = Enemy;//wip this points to first element, not whole array
+/*
+Then, the surrounding typedef takes that struct and gives it the name node. Why is this, you might ask?
+
+This is due to the fact that in C (unlike C++) using structs by their tag name requires prefixing the type with struct.*/
+
+int max_enemies = 11;
+
+STyp Enemy[11];
+
+struct State *enemy_ptr = Enemy;
+
+
+//enemy_ptr = Enemy;//wip this points to first element, not whole array
 //its size is one element of the array (i think), below should be size x4 but throws an error
 //want to check if enemy_ptr = Enemy[0] then the function knows to operate on Enemy array
 //STyp enemy_ptr = &Enemy;
-void Init(void){ int i;
-  for(i=0;i<4;i++){
-    Enemy[i].x = 20*i;
+void Init(void){ 
+	//needs to be called once p/enemy now
+	int i;
+	int bool_flag = 1;
+	
+  //for(i=0;i<max_enemies;i++){
+	while (bool_flag && i< max_enemies){
+		if (Enemy[i].life !=0){break;}
+		Enemy[i].x = 20*i;
     Enemy[i].y = 10;
     Enemy[i].image[0] = SmallEnemy30PointA;
     Enemy[i].image[1] = SmallEnemy30PointB;
     Enemy[i].life = 1;
+		bool_flag = 0;
+		i++;
    }
 }
 
@@ -347,29 +401,36 @@ void Init_player(void){ int i=0;
 
 STyp laser[19];
 unsigned long num_lasers = 0;
-void Init_laser(void){ int i= num_lasers++;
-  //for(i=0;i<4;i++){
-		if (num_lasers<20){
-    laser[i].x = (player[0].x+PLAYERW)/2;
+int max_lasers = 19;
+void Init_laser(void){ int i=0;//= num_lasers++;
+  //for(i=0;i<4;i++)
+	int bool_flag = 1;//check for successful generation of laser
+	while (bool_flag && i<max_lasers){
+		if (laser[i].life ==0){//wip is this wrong? no if l=0 you can overwrite
+    laser[i].x = (player[0].x+(PLAYERW/2));
     laser[i].y = 47-PLAYERH;
     laser[i].image[0] = Laser0;
 		laser[i].life = 1;
+		num_lasers++;
+		bool_flag =0;}
+		else{
+		i++;}
+		
     //player[i].image[1] = BigExplosion0;
 		//player[i].image[2] = BigExplosion1;
 		}}
+		
 
-//wip		
-void dirty_array(STyp ptr, int i){
-	if( &ptr == &Enemy[i]){
-	i++;
-}}
 //random enemy gen should say if length of enemy struct is < eg 4; generate a new enemy
-void Move(void){ int i;
-  for(i=0;i<4;i++){
+void Move(void){ int i;//wip
+  for(i=0;i<max_enemies;i++){
     if(Enemy[i].x < 72){//if they aren't about to move off screen
       Enemy[i].x += 1; // move to right
-    }else{
-      Enemy[i].life = 0;
+    }
+		else{
+			Enemy[i].x -= 20; // move to right
+		//else{
+      //Enemy[i].life = 0;
     }
   }
 }
@@ -380,8 +441,10 @@ void Move_laser(int i){
 	laser[i].y -= 1;}}
 void Move_ply(int i, unsigned long adc_in){ 
 		// read adc and move ship accordingly
-   player[0].x += 1;}
-	
+  int mov_right = 1;
+if(mov_right && player[0].x <43){//careful of hex vs dec!	
+	player[0].x += 1;}
+else(player[0].x -= 20);}	
 	/*if(player[i].x < 72 && player[i].x >0){//if they aren't about to move off screen
       Enemy[i].x += 1; // move to right
     }else{
@@ -390,40 +453,40 @@ void Move_ply(int i, unsigned long adc_in){
   
 
 unsigned long FrameCount=0;
-void Draw(void){ int i, j;
+void Draw(void){ int i, j,k;
   Nokia5110_ClearBuffer();
-	//ldb
 	if(player[0].life > 0){
     // Nokia5110_PrintBMP(32,47, player[0].image[0], 0); //player[0].image[0], Enemy[1].image[FrameCount]
-     Nokia5110_PrintBMP(player[0].x, player[0].y, player[0].image[0], 0); //player[0].image[0], Enemy[1].image[FrameCount]
-
-	}
-	//Nokia5110_DisplayBuffer();//ldb
-  
+     Nokia5110_PrintBMP(player[0].x, player[0].y, player[0].image[0], 0); 
+	}  
 	//ldb possible issue with 0 length array of structs etc
 	if(num_lasers > 0){
 		for(j=0; j<= num_lasers;j++){
-		Nokia5110_PrintBMP(laser[j].x, laser[j].y, laser[j].image[0], 0);}
-	}
-	
-	//if ( i >= Enemy[i].x && i <= Enemy[i].x+ENEMY20W )
-	//&& (laser[i].x+LASERW)/2)
-	
+			if (laser[j].life >0){
+			Nokia5110_PrintBMP(laser[j].x, laser[j].y, laser[j].image[0], 0);}
+	}}
 	//td this should enumerate through all elements of enemy arr
 	// else statement that catches lives = 0 should trigger deletion
-	for(i=0;i<3;i++){
+	for(i=0;i<max_enemies;i++){
     if(Enemy[i].life > 0){
-			if(laser[0].y-LASERH == Enemy[i].y && (Enemy[i].x+ENEMY20W) >= laser[0].x && laser[0].x >= Enemy[i].x ){
+			for (k=0; k <= num_lasers;k++){
+			//y condition is much more important and faster to exclude possible collisions
+			//nice way to optimise
+			if(laser[k].y-LASERH == Enemy[i].y && (Enemy[i].x+ENEMY20W) >= laser[k].x && laser[k].x >= Enemy[i].x ){
 				Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, SmallExplosion0, 0);
 				Enemy[i].life--;
-				laser[i].life--;}
+				laser[k].life--;
+				num_lasers--;//red could be combined w max_lasers
+				Init();}
+				//Init_laser();}//wip this is hardwired above, bit tricky to check which laser killed the sprite?
 			//if(laser[i].y-LASERH <= Enemy[i].y && (Enemy[i].x+ENEMY20W) >= Enemy[i].x && laser[i].x <= laser[i].x ){ 
 				//if( (Enemy[i].x+ENEMY20W) >= Enemy[i].x && laser[i].x <= laser[i].x ) {
 				//		Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, SmallExplosion0, 0);
 			else{Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, Enemy[i].image[FrameCount], 0);
-			}}
-		//else{dirty_array(enemy_ptr, i);}//wip needs to accept ptr to array and index
-		else{dirty_array(Enemy[i], i);}//better to pass a ptr but sher look
+			}}}
+		
+//else{dirty_array(enemy_ptr, i);}//wip needs to accept ptr to array and index
+		//else{dirty_array(Enemy[i], i);}//better to pass a ptr but sher look
 		// Nokia5110_PrintBMP(32, 47, PlayerShip0,0); //player[0].image[0], Enemy[1].image[FrameCount]
 
 			/*dis_buf takes a bitmap in the previously described format and puts its image data in the proper 
@@ -438,7 +501,8 @@ DAC output should be done in Timer0A_Handler()look at Lab13, where sound
 is generated using SysTick timer. Will be similar, but now using Timer0A.*/
 
 int main(void){ int AnyLife = 1; int i;
-  TExaS_Init(NoLCD_NoScope);  // set system clock to 80 MHz
+  PortBEF_Init();
+	TExaS_Init(NoLCD_NoScope);  // set system clock to 80 MHz
   // you cannot use both the Scope and the virtual Nokia (both need UART0)
   Random_Init(1);
   Nokia5110_Init();
@@ -458,16 +522,23 @@ int main(void){ int AnyLife = 1; int i;
   Nokia5110_DisplayBuffer();   // draw buffer
 
   //Delay100ms(50);              // delay 5 sec at 80 MHz
-
+	ADC0_Init();
   Init();
+	Init();
 	Init_player();
-	Init_laser();
+
+
   Timer2_Init(80000000/30);  // 30 Hz
 	while(1){
+		while(Semaphore == 0){};
+    Semaphore = 0; // runs at 30 Hz
+			
 		Draw();
+		Delay100ms(1);
 		Move_ply(1,4096);
-		Move_laser(0);//change to move all lasers and void input?
-		//Init_laser();
+		Move_laser(0);//change to move all lasers and void input?	
+    //AnyLife = 0;
+		Semaphore =1;
 	}
 	
   while(AnyLife){
@@ -520,7 +591,10 @@ void Timer2_Init(unsigned long period){
 void Timer2A_Handler(void){ 
   TIMER2_ICR_R = 0x00000001;   // acknowledge timer2A timeout
   TimerCount++;
-  Move(); 
+  //Move(); //should all move functions be called here?
+	if (GPIO_PORTE_DATA_R&0x01){
+	Init_laser();}
+	ADCdata = ADC0_In();		//wip
   Semaphore = 1; // trigger
 }
 void Delay100ms(unsigned long count){unsigned long volatile time;
@@ -532,3 +606,23 @@ void Delay100ms(unsigned long count){unsigned long volatile time;
     count--;
   }
 }
+
+
+
+unsigned long Convert(unsigned long sample){
+	//might be a case of preserving working with ints w/ >>
+	//4000/4095, 0x44=68 so ship width =4
+	
+	 sample=(A*ADCdata>>10)+1;
+	
+	//sample = (sample/1000);
+  return sample;  // replace this line with real code
+}
+
+//sbox		
+/*		
+void dirty_array(STyp *ptr, int i){
+//void dirty_array(Struct state ptr, int i){
+	if( ptr == &Enemy[0]){//ptr is already an address, don't need to deref
+	i++;
+}}*/
