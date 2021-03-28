@@ -56,6 +56,7 @@
 #include "TExaS.h"
 #include "ADC.h"
 
+
 void PortBEF_Init(void){ volatile unsigned long delay;
   //SYSCTL_RCGC2_R |= 0x00000020;      // 1) F clock
   //delay = SYSCTL_RCGC2_R;            // delay to allow clock to stabilize
@@ -96,9 +97,19 @@ unsigned long Semaphore;
 unsigned long A = (1024*4000)/4095;
 void Move_ply(int i, unsigned long adc_in);
 void fire_laser();
+
+int round2(double number);
 unsigned long Convert(unsigned long sample);
 unsigned long ADCdata; 
-
+unsigned long last_adc;
+unsigned char spawn_timer =1;
+//tidyup
+unsigned long res;
+unsigned long res3;
+unsigned long res2;
+int enemy_cnt = 20; //dynamic for level? Extra 20 enemies?
+int level;//lock to range 0:4?
+int game_over;//should init to 0
 
 // *************************** Images ***************************
 // enemy ship that starts at the top of the screen (arms/mouth closed)
@@ -356,12 +367,11 @@ struct State {
 typedef struct State STyp;
 /*
 Then, the surrounding typedef takes that struct and gives it the name node. Why is this, you might ask?
-
 This is due to the fact that in C (unlike C++) using structs by their tag name requires prefixing the type with struct.*/
 
-int max_enemies = 11;
+int max_enemies = 6;//max allowed on screen?
 
-STyp Enemy[11];
+STyp Enemy[6];
 
 struct State *enemy_ptr = Enemy;
 
@@ -372,20 +382,22 @@ struct State *enemy_ptr = Enemy;
 //STyp enemy_ptr = &Enemy;
 void Init(void){ 
 	//needs to be called once p/enemy now
-	int i;
+	int i =0;
 	int bool_flag = 1;
-	
+	//good place to check GO, if it's calling Init but all enemies are dead and 
+	//the max for the level has been reached you won the level
+	while (Enemy[i].life !=0){
+	i++;}//td randomise this
   //for(i=0;i<max_enemies;i++){
-	while (bool_flag && i< max_enemies){
-		if (Enemy[i].life !=0){break;}
+	while (bool_flag && i<= max_enemies){
 		Enemy[i].x = 20*i;
     Enemy[i].y = 10;
     Enemy[i].image[0] = SmallEnemy30PointA;
     Enemy[i].image[1] = SmallEnemy30PointB;
     Enemy[i].life = 1;
-		bool_flag = 0;
-		i++;
+		bool_flag = 0;		
    }
+	if (i ==0 && enemy_cnt == 0){game_over=1;}//maybe have a function to decide if player won or aliens!
 }
 
 STyp player[1];
@@ -404,6 +416,8 @@ unsigned long num_lasers = 0;
 int max_lasers = 19;
 void Init_laser(void){ int i=0;//= num_lasers++;
   //for(i=0;i<4;i++)
+	//source =0, player launch, 1 enemy launch
+	
 	int bool_flag = 1;//check for successful generation of laser
 	while (bool_flag && i<max_lasers){
 		if (laser[i].life ==0){//wip is this wrong? no if l=0 you can overwrite
@@ -415,20 +429,40 @@ void Init_laser(void){ int i=0;//= num_lasers++;
 		bool_flag =0;}
 		else{
 		i++;}
-		
     //player[i].image[1] = BigExplosion0;
 		//player[i].image[2] = BigExplosion1;
 		}}
-		
 
+
+STyp nlaser[5];
+unsigned long en_num_lasers = 0;
+int en_max_lasers = 5;		
+void Init_en_laser(int source_sprite){ int i=source_sprite;//= num_lasers++;
+  //for(i=0;i<4;i++)
+	//src/source is which enemy fired it
+	//need to make sure firing enemy has a life
+	int bool_flag = 1;//check for successful generation of laser
+	while (bool_flag && i<en_max_lasers){
+		if (nlaser[i].life ==0 && Enemy[i].life >0){//wip is this wrong? no if l=0 you can overwrite
+    nlaser[i].x = (Enemy[i].x+(ENEMY10W/2));//WIP
+    nlaser[i].y = ENEMY10H+2;
+    nlaser[i].image[0] = Missile1;
+		nlaser[i].life = 1;
+		en_num_lasers++;
+		bool_flag =0;}
+		else{
+		i++;}
+    //player[i].image[1] = BigExplosion0;
+		//player[i].image[2] = BigExplosion1;
+		}}
 //random enemy gen should say if length of enemy struct is < eg 4; generate a new enemy
 void Move(void){ int i;//wip
   for(i=0;i<max_enemies;i++){
-    if(Enemy[i].x < 72){//if they aren't about to move off screen
+    if(Enemy[i].x < 43){//if they aren't about to move off screen
       Enemy[i].x += 1; // move to right
     }
 		else{
-			Enemy[i].x -= 20; // move to right
+			Enemy[i].x -= 30; // move to right
 		//else{
       //Enemy[i].life = 0;
     }
@@ -437,19 +471,43 @@ void Move(void){ int i;//wip
 
 void Move_laser(int i){ 
 		// read adc and move ship accordingly
-  for(i=0;i <= num_lasers;i++){ 
-	laser[i].y -= 1;}}
+  
+	for(i=0;i <= num_lasers;i++){ 
+	laser[i].y -= 1;}
+	//int m; 
+	for(i=0;i <= en_num_lasers;i++){ 
+	nlaser[i].y += 1;}
+}
 void Move_ply(int i, unsigned long adc_in){ 
-		// read adc and move ship accordingly
-  int mov_right = 1;
-if(mov_right && player[0].x <43){//careful of hex vs dec!	
-	player[0].x += 1;}
-else(player[0].x -= 20);}	
-	/*if(player[i].x < 72 && player[i].x >0){//if they aren't about to move off screen
-      Enemy[i].x += 1; // move to right
-    }else{
-      Enemy[i].life = 0;
-    }*/
+  //you have 4096 possible ADC vales but only 84 pixels
+	unsigned long adc_max =4095;//move that to global
+	unsigned long res = 100*adc_in/adc_max;
+  res = (res+5)/10;//equivalent of adding .5 so it goes to nearest integer
+   // unsigned long output = 69-plus_divten;
+    
+	res =res*(84-PLAYERW)/10;
+	player[0].x = res;	
+}
+	/*
+	0x00 0x3C
+	0x3C 0x78,0xB4//180
+	0xF0,12C,168//360
+	1A4,1E0,21C //540
+	
+if( res2 >= last_adc-0x1E | res2 >= last_adc+0x1E ){}
+	
+	
+	//max = 682 2AA
+	//mid =333 0x14D
+	//min=0
+	//4B IS ABOUT 60
+	switch(res2){
+    case  (>682): 5; break;   // 10 to 9
+    case  2: theNext = 5;  break;   // 9 to 5
+    //case 5: theNext = 6;  break;   // 5 to 6
+   // case 6: theNext = 10; break;   // 6 to 10
+    default: theNext = 10;
+  */
   
 
 unsigned long FrameCount=0;
@@ -464,28 +522,36 @@ void Draw(void){ int i, j,k;
 		for(j=0; j<= num_lasers;j++){
 			if (laser[j].life >0){
 			Nokia5110_PrintBMP(laser[j].x, laser[j].y, laser[j].image[0], 0);}
+			if(laser[j].y <= 2){laser[j].life--;}
+	}}
+	
+	if(en_num_lasers > 0){
+		for(j=0; j<= en_num_lasers;j++){
+			if (nlaser[j].life >0){
+			Nokia5110_PrintBMP(nlaser[j].x, nlaser[j].y, nlaser[j].image[0], 0);}
+			if(nlaser[j].y <= 44){nlaser[j].life--;}
 	}}
 	//td this should enumerate through all elements of enemy arr
 	// else statement that catches lives = 0 should trigger deletion
 	for(i=0;i<max_enemies;i++){
     if(Enemy[i].life > 0){
 			for (k=0; k <= num_lasers;k++){
+			
 			//y condition is much more important and faster to exclude possible collisions
 			//nice way to optimise
-			if(laser[k].y-LASERH == Enemy[i].y && (Enemy[i].x+ENEMY20W) >= laser[k].x && laser[k].x >= Enemy[i].x ){
+			if(laser[k].y-LASERH == Enemy[i].y+1 && (Enemy[i].x+ENEMY20W) >= laser[k].x && laser[k].x >= Enemy[i].x ){
 				Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, SmallExplosion0, 0);
 				Enemy[i].life--;
 				laser[k].life--;
-				num_lasers--;//red could be combined w max_lasers
-				Init();}
-				//Init_laser();}//wip this is hardwired above, bit tricky to check which laser killed the sprite?
+				num_lasers--;}//red could be combined w max_lasers
+			
 			//if(laser[i].y-LASERH <= Enemy[i].y && (Enemy[i].x+ENEMY20W) >= Enemy[i].x && laser[i].x <= laser[i].x ){ 
 				//if( (Enemy[i].x+ENEMY20W) >= Enemy[i].x && laser[i].x <= laser[i].x ) {
 				//		Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, SmallExplosion0, 0);
 			else{Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, Enemy[i].image[FrameCount], 0);
 			}}}
 		
-//else{dirty_array(enemy_ptr, i);}//wip needs to accept ptr to array and index
+//else{dirty_array(enemy_ptr, i);}// needs to accept ptr to array and index
 		//else{dirty_array(Enemy[i], i);}//better to pass a ptr but sher look
 		// Nokia5110_PrintBMP(32, 47, PlayerShip0,0); //player[0].image[0], Enemy[1].image[FrameCount]
 
@@ -522,9 +588,12 @@ int main(void){ int AnyLife = 1; int i;
   Nokia5110_DisplayBuffer();   // draw buffer
 
   //Delay100ms(50);              // delay 5 sec at 80 MHz
+	
+	//this is in main
 	ADC0_Init();
   Init();
-	Init();
+	Init();	
+	
 	Init_player();
 
 
@@ -535,10 +604,13 @@ int main(void){ int AnyLife = 1; int i;
 			
 		Draw();
 		Delay100ms(1);
-		Move_ply(1,4096);
+		//Move_ply(1,4096);//wip get rid of this and swap control fully to adc or use for default
 		Move_laser(0);//change to move all lasers and void input?	
     //AnyLife = 0;
 		Semaphore =1;
+	
+			
+			
 	}
 	
   while(AnyLife){
@@ -594,8 +666,19 @@ void Timer2A_Handler(void){
   //Move(); //should all move functions be called here?
 	if (GPIO_PORTE_DATA_R&0x01){
 	Init_laser();}
-	ADCdata = ADC0_In();		//wip
-  Semaphore = 1; // trigger
+	ADCdata = ADC0_In();
+	//Move_ply(0, Convert(ADCdata));
+	Move_ply(0, ADCdata);
+  
+			//modulo 3=0 missile? wip
+//	spawn_timer = (spawn_timer++)&0xFF;//255
+	spawn_timer++;
+	if (spawn_timer==255){
+			Init();}
+		//td  every 3 seconds fire a missile? every 7 spawn an enemy if there is space 	
+	
+	
+	Semaphore = 1; // trigger
 }
 void Delay100ms(unsigned long count){unsigned long volatile time;
   while(count>0){
@@ -618,6 +701,12 @@ unsigned long Convert(unsigned long sample){
 	//sample = (sample/1000);
   return sample;  // replace this line with real code
 }
+
+int round2(double number)
+{
+    return (number >= 0) ? (int)(number + 0.5) : (int)(number - 0.5);
+}
+
 
 //sbox		
 /*		
