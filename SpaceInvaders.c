@@ -100,9 +100,12 @@ void fire_laser();
 
 int round2(double number);
 unsigned long Convert(unsigned long sample);
+unsigned long Random5(int i);
+
 unsigned long ADCdata; 
 unsigned long last_adc;
 unsigned char spawn_timer =1;
+signed char mis_spawn_timer=1;
 //tidyup
 unsigned long res;
 unsigned long res3;
@@ -369,9 +372,9 @@ typedef struct State STyp;
 Then, the surrounding typedef takes that struct and gives it the name node. Why is this, you might ask?
 This is due to the fact that in C (unlike C++) using structs by their tag name requires prefixing the type with struct.*/
 
-int max_enemies = 6;//max allowed on screen?
+int max_enemies = 5;//max allowed on screen?
 
-STyp Enemy[6];
+STyp Enemy[5];
 
 struct State *enemy_ptr = Enemy;
 
@@ -380,15 +383,19 @@ struct State *enemy_ptr = Enemy;
 //its size is one element of the array (i think), below should be size x4 but throws an error
 //want to check if enemy_ptr = Enemy[0] then the function knows to operate on Enemy array
 //STyp enemy_ptr = &Enemy;
-void Init(void){ 
+void Init(){ 
 	//needs to be called once p/enemy now
-	int i =0;
+	int i;
+	unsigned long r=Random5(5);
 	int bool_flag = 1;
 	//good place to check GO, if it's calling Init but all enemies are dead and 
 	//the max for the level has been reached you won the level
-	while (Enemy[i].life !=0){
-	i++;}//td randomise this
+	while (Enemy[r].life !=0){
+	//i++;
+	r=Random5(max_enemies);
+	}//td randomise this
   //for(i=0;i<max_enemies;i++){
+	i =r;
 	while (bool_flag && i<= max_enemies){
 		Enemy[i].x = 20*i;
     Enemy[i].y = 10;
@@ -397,6 +404,7 @@ void Init(void){
     Enemy[i].life = 1;
 		bool_flag = 0;		
    }
+	//this needs an overhaul
 	if (i ==0 && enemy_cnt == 0){game_over=1;}//maybe have a function to decide if player won or aliens!
 }
 
@@ -529,7 +537,7 @@ void Draw(void){ int i, j,k;
 		for(j=0; j<= en_num_lasers;j++){
 			if (nlaser[j].life >0){
 			Nokia5110_PrintBMP(nlaser[j].x, nlaser[j].y, nlaser[j].image[0], 0);}
-			if(nlaser[j].y <= 44){nlaser[j].life--;}
+			if(nlaser[j].y >= 44){nlaser[j].life =0;}
 	}}
 	//td this should enumerate through all elements of enemy arr
 	// else statement that catches lives = 0 should trigger deletion
@@ -593,9 +601,10 @@ int main(void){ int AnyLife = 1; int i;
 	ADC0_Init();
   Init();
 	Init();	
+	Init();
 	
 	Init_player();
-
+	
 
   Timer2_Init(80000000/30);  // 30 Hz
 	while(1){
@@ -667,19 +676,24 @@ void Timer2A_Handler(void){
 	if (GPIO_PORTE_DATA_R&0x01){
 	Init_laser();}
 	ADCdata = ADC0_In();
-	//Move_ply(0, Convert(ADCdata));
 	Move_ply(0, ADCdata);
-  
-			//modulo 3=0 missile? wip
-//	spawn_timer = (spawn_timer++)&0xFF;//255
+
 	spawn_timer++;
-	if (spawn_timer==255){
+	if (spawn_timer==10){//change to 255 after debug
 			Init();}
+	if (spawn_timer==85 | spawn_timer==170){//change to 255 after debug
+		//wip, variable to hold number of live enemies would be good
+			Init_en_laser(Random5(max_enemies));}//randomise the enemy firing it
 		//td  every 3 seconds fire a missile? every 7 spawn an enemy if there is space 	
-	
 	
 	Semaphore = 1; // trigger
 }
+	
+unsigned long Random5(int i){
+	return ((Random()>>24)%i)+1;}
+	
+
+
 void Delay100ms(unsigned long count){unsigned long volatile time;
   while(count>0){
     time = 727240;  // 0.1sec at 80 MHz
@@ -715,3 +729,4 @@ void dirty_array(STyp *ptr, int i){
 	if( ptr == &Enemy[0]){//ptr is already an address, don't need to deref
 	i++;
 }}*/
+//	spawn_timer = (spawn_timer++)&0xFF;//maybe query why this didn't work on forum
