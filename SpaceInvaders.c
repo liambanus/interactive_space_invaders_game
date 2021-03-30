@@ -88,19 +88,24 @@ GPIO_PORTB_DEN_R |= 0x3F; // 7) enable digital on PB5-0
 
 
 
+void (*PeriodicTask)(void);   // user function
 void DisableInterrupts(void); // Disable interrupts
 void EnableInterrupts(void);  // Enable interrupts
 void Timer2_Init(unsigned long period);
+void Timer0_Init(unsigned long period);
 void Delay100ms(unsigned long count); // time delay in 0.1 seconds
 unsigned long TimerCount;
 unsigned long Semaphore;
+unsigned long Semaphore0;
+
+int but_prs=0;
 unsigned long A = (1024*4000)/4095;
 void Move_ply(int i, unsigned long adc_in);
 void fire_laser();
 
 int round2(double number);
 unsigned long Convert(unsigned long sample);
-unsigned long Random5(int i);
+int Random_i(int i);
 
 unsigned long ADCdata; 
 unsigned long last_adc;
@@ -372,11 +377,11 @@ typedef struct State STyp;
 Then, the surrounding typedef takes that struct and gives it the name node. Why is this, you might ask?
 This is due to the fact that in C (unlike C++) using structs by their tag name requires prefixing the type with struct.*/
 
-int max_enemies = 5;//max allowed on screen?
+int max_enemies = 4;//max allowed on screen?
 
-STyp Enemy[5];
+STyp Enemy[4];//this makes an array of index 0:4!!! Not 5, Abbeymemoryleaks
 
-struct State *enemy_ptr = Enemy;
+//struct State *enemy_ptr = Enemy;
 
 
 //enemy_ptr = Enemy;//wip this points to first element, not whole array
@@ -385,17 +390,20 @@ struct State *enemy_ptr = Enemy;
 //STyp enemy_ptr = &Enemy;
 void Init(){ 
 	//needs to be called once p/enemy now
-	int i;
-	unsigned long r=Random5(5);
+	int i=0;
+	int cnt=0;//to allow random generation while preventing an infinite loop if screen is full
+	int r=Random_i(max_enemies);
 	int bool_flag = 1;
 	//good place to check GO, if it's calling Init but all enemies are dead and 
 	//the max for the level has been reached you won the level
-	while (Enemy[r].life !=0){
+	
+	while (Enemy[r].life !=0 && cnt <12){
 	//i++;
-	r=Random5(max_enemies);
+		r=Random_i(max_enemies);//should be 0:4
+	cnt++;	
 	}//td randomise this
   //for(i=0;i<max_enemies;i++){
-	i =r;
+	i =r;//0to3
 	while (bool_flag && i<= max_enemies){
 		Enemy[i].x = 20*i;
     Enemy[i].y = 10;
@@ -414,20 +422,17 @@ void Init_player(void){ int i=0;
     player[i].x = 32;
     player[i].y = 47;
     player[i].image[0] = PlayerShip0;
-    player[i].image[1] = BigExplosion0;
+    player[i].image[1] = PlayerShip0;
 		player[i].image[2] = BigExplosion1;
     player[i].life = 3;
 }
 
-STyp laser[19];
-unsigned long num_lasers = 0;
+STyp laser[20];
+signed long num_lasers = 0;
 int max_lasers = 19;
-void Init_laser(void){ int i=0;//= num_lasers++;
-  //for(i=0;i<4;i++)
-	//source =0, player launch, 1 enemy launch
-	
+void Init_laser(void){ int i=0;//= num_lasers++;	
 	int bool_flag = 1;//check for successful generation of laser
-	while (bool_flag && i<max_lasers){
+	while (bool_flag && i<=max_lasers){
 		if (laser[i].life ==0){//wip is this wrong? no if l=0 you can overwrite
     laser[i].x = (player[0].x+(PLAYERW/2));
     laser[i].y = 47-PLAYERH;
@@ -444,14 +449,19 @@ void Init_laser(void){ int i=0;//= num_lasers++;
 
 STyp nlaser[5];
 unsigned long en_num_lasers = 0;
-int en_max_lasers = 5;		
-void Init_en_laser(int source_sprite){ int i=source_sprite;//= num_lasers++;
+int en_max_lasers = 4;	
+//-1 due to indexing shite		//pse
+void Init_en_laser(int source_sprite){ int i=0;int j=0;//= num_lasers++;
   //for(i=0;i<4;i++)
 	//src/source is which enemy fired it
 	//need to make sure firing enemy has a life
 	int bool_flag = 1;//check for successful generation of laser
-	while (bool_flag && i<en_max_lasers){
-		if (nlaser[i].life ==0 && Enemy[i].life >0){//wip is this wrong? no if l=0 you can overwrite
+	j= source_sprite;
+	
+	//wip problem is dead sprites calling laser_init
+	//but random seems to always feed in 0, that's why you would sometimes see lasers init from the left
+	while (bool_flag && i<=en_max_lasers){
+		if (nlaser[i].life ==0 && Enemy[j].life >0){//wip is this wrong? no if l=0 you can overwrite
     nlaser[i].x = (Enemy[i].x+(ENEMY10W/2));//WIP
     nlaser[i].y = ENEMY10H+2;
     nlaser[i].image[0] = Missile1;
@@ -478,14 +488,18 @@ void Move(void){ int i;//wip
 }
 
 void Move_laser(int i){ 
-		// read adc and move ship accordingly
-  
-	for(i=0;i <= num_lasers;i++){ 
-	laser[i].y -= 1;}
-	//int m; 
-	for(i=0;i <= en_num_lasers;i++){ 
-	nlaser[i].y += 1;}
+	for(i=0;i <= max_lasers;i++){
+if(laser[i].life ==1){		
+	//if (laser[i].y >0){
+		laser[i].y -= 1;}
+	//else{(laser[i].life =0);}
 }
+	 
+	
+	for(i=0;i <= en_num_lasers;i++){ 
+		if(nlaser[i].life >0){	
+	nlaser[i].y += 1;}
+}}
 void Move_ply(int i, unsigned long adc_in){ 
   //you have 4096 possible ADC vales but only 84 pixels
 	unsigned long adc_max =4095;//move that to global
@@ -519,60 +533,70 @@ if( res2 >= last_adc-0x1E | res2 >= last_adc+0x1E ){}
   
 
 unsigned long FrameCount=0;
-void Draw(void){ int i, j,k;
+void Draw(void){ int i, j,k,L,m;
   Nokia5110_ClearBuffer();
+	
+	//if(num_lasers > 0){
+	for(i=0; i< max_lasers;i++){
+		//| laser[j].y == 50
+	if(laser[i].y == 5 ){
+				laser[i].life=0; 
+				laser[i].y=0;
+				num_lasers--;}}
+	
 	if(player[0].life > 0){
     // Nokia5110_PrintBMP(32,47, player[0].image[0], 0); //player[0].image[0], Enemy[1].image[FrameCount]
      Nokia5110_PrintBMP(player[0].x, player[0].y, player[0].image[0], 0); 
 	}  
 	//ldb possible issue with 0 length array of structs etc
-	if(num_lasers > 0){
-		for(j=0; j<= num_lasers;j++){
-			if (laser[j].life >0){
-			Nokia5110_PrintBMP(laser[j].x, laser[j].y, laser[j].image[0], 0);}
-			if(laser[j].y <= 2){laser[j].life--;}
-	}}
-	
+	L = num_lasers;
 	if(en_num_lasers > 0){
-		for(j=0; j<= en_num_lasers;j++){
+		for(j=0; j< en_num_lasers;j++){
 			if (nlaser[j].life >0){
 			Nokia5110_PrintBMP(nlaser[j].x, nlaser[j].y, nlaser[j].image[0], 0);}
-			if(nlaser[j].y >= 44){nlaser[j].life =0;}
+			if(nlaser[j].y >= 44){nlaser[j].life =0;en_num_lasers--;}
 	}}
 	//td this should enumerate through all elements of enemy arr
 	// else statement that catches lives = 0 should trigger deletion
-	for(i=0;i<max_enemies;i++){
-    if(Enemy[i].life > 0){
-			for (k=0; k <= num_lasers;k++){
-			
+	for(i=0;i<=max_enemies;i++){
+    //if sprite is alive, check to see if a laser is about to collide
+		if(Enemy[i].life > 0){
+			//for this sprite, check all live lasers
+			for (k=0; k <= L;k++){
+			//if(laser[k].y >48){num_lasers--;}
 			//y condition is much more important and faster to exclude possible collisions
 			//nice way to optimise
-			if(laser[k].y-LASERH == Enemy[i].y+1 && (Enemy[i].x+ENEMY20W) >= laser[k].x && laser[k].x >= Enemy[i].x ){
+				
+			//if laser[k] y co-ord is overlapping with this laser trigger an explosion,
+				//kill the laser, decrement num_lasers and kill the enemy
+			if(laser[k].life ==1 && laser[k].y-LASERH == Enemy[i].y-1 && (Enemy[i].x+ENEMY20W) > laser[k].x && laser[k].x > Enemy[i].x ){
 				Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, SmallExplosion0, 0);
-				Enemy[i].life--;
-				laser[k].life--;
+				Enemy[i].life=0;
+			
+				laser[k].life=0;
+				laser[k].y=0;
 				num_lasers--;}//red could be combined w max_lasers
 			
-			//if(laser[i].y-LASERH <= Enemy[i].y && (Enemy[i].x+ENEMY20W) >= Enemy[i].x && laser[i].x <= laser[i].x ){ 
-				//if( (Enemy[i].x+ENEMY20W) >= Enemy[i].x && laser[i].x <= laser[i].x ) {
-				//		Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, SmallExplosion0, 0);
+			//still in for loop cycling through all enemies and lasers	
 			else{Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, Enemy[i].image[FrameCount], 0);
 			}}}
-		
-//else{dirty_array(enemy_ptr, i);}// needs to accept ptr to array and index
-		//else{dirty_array(Enemy[i], i);}//better to pass a ptr but sher look
-		// Nokia5110_PrintBMP(32, 47, PlayerShip0,0); //player[0].image[0], Enemy[1].image[FrameCount]
-
-			/*dis_buf takes a bitmap in the previously described format and puts its image data in the proper 
-// location in the buffer so the image will appear on the screen after the next call to
-*/
-  }
+  }	
+		m=0;
+		for(m=0; m <= L;m++){
+			//cnt =laser[j].life;
+			if (laser[m].life ==1){
+			Nokia5110_PrintBMP(laser[m].x, laser[m].y, laser[m].image[0], 0);}
+			//unsure if these numbers are the problem
+				//if (num_lasers>0) {num_lasers--;}
+			}
+	
   Nokia5110_DisplayBuffer();      // draw buffer
   FrameCount = (FrameCount+1)&0x01; // 0,1,0,1,...
 }
 /*Timer0A (16/32-bit) -> IRQ=#19 (page 104) ? PRI4, bits 31-29 (pages152-153)+EN0 bit19(Pg142)
 DAC output should be done in Timer0A_Handler()look at Lab13, where sound
 is generated using SysTick timer. Will be similar, but now using Timer0A.*/
+
 
 int main(void){ int AnyLife = 1; int i;
   PortBEF_Init();
@@ -598,25 +622,37 @@ int main(void){ int AnyLife = 1; int i;
   //Delay100ms(50);              // delay 5 sec at 80 MHz
 	
 	//this is in main
+	Init_player();
 	ADC0_Init();
   Init();
 	Init();	
 	Init();
 	
-	Init_player();
 	
-
+	
+	Timer0_Init(80000000/10);
   Timer2_Init(80000000/30);  // 30 Hz
 	while(1){
-		while(Semaphore == 0){};
-    Semaphore = 0; // runs at 30 Hz
+		
+		while(Semaphore == 0){};//it just stalls here, notice the bracket
+		//Sem changes to 1, proceed but the first thing you do is reset the semaphore	
+    Semaphore = 0; // runs at 30 Hz	
+		//but_prs =0;	
+		
 			
-		Draw();
+		if (but_prs==1){
+			Init_laser();}
+		but_prs=0;
 		Delay100ms(1);
+		Draw();
+		
 		//Move_ply(1,4096);//wip get rid of this and swap control fully to adc or use for default
-		Move_laser(0);//change to move all lasers and void input?	
-    //AnyLife = 0;
-		Semaphore =1;
+			//might be nice later:
+		//if(num_lasers >0){Move_laser(0);}//change to move all lasers and void input?	
+    Move_laser(0);
+		
+		//AnyLife = 0;
+		//Semaphore =1;
 	
 			
 			
@@ -672,25 +708,39 @@ void Timer2_Init(unsigned long period){
 void Timer2A_Handler(void){ 
   TIMER2_ICR_R = 0x00000001;   // acknowledge timer2A timeout
   TimerCount++;
+	//int cur;
+//remember the button could be checked multiple times for every time draw is called
   //Move(); //should all move functions be called here?
-	if (GPIO_PORTE_DATA_R&0x01){
-	Init_laser();}
+
 	ADCdata = ADC0_In();
 	Move_ply(0, ADCdata);
-
+	Random_Init(ADCdata);
+	if (GPIO_PORTE_DATA_R&0x01){
+but_prs=1;}
+	//Init_laser();}
 	spawn_timer++;
 	if (spawn_timer==10){//change to 255 after debug
 			Init();}
 	if (spawn_timer==85 | spawn_timer==170){//change to 255 after debug
 		//wip, variable to hold number of live enemies would be good
-			Init_en_laser(Random5(max_enemies));}//randomise the enemy firing it
+			Init_en_laser(Random_i(max_enemies));}//randomise the enemy firing it
 		//td  every 3 seconds fire a missile? every 7 spawn an enemy if there is space 	
 	
 	Semaphore = 1; // trigger
 }
+
+void Timer0A_Handler(void){
+	//if (GPIO_PORTE_DATA_R&0x01){
+	//but_prs =1;}
+	//else{but_prs=0;}
+	//Init_laser();}
+  TIMER0_ICR_R = TIMER_ICR_TATOCINT;// acknowledge TIMER0A timeout
+  //(*PeriodicTask)();                // execute user task
+}
 	
-unsigned long Random5(int i){
-	return ((Random()>>24)%i)+1;}
+
+int Random_i(int i){
+	return ((Random()>>24)%i);}
 	
 
 
@@ -722,7 +772,61 @@ int round2(double number)
 }
 
 
-//sbox		
+
+
+
+// ***************** Timer0_Init ****************
+// Activate TIMER0 interrupts to run user task periodically
+// Inputs:  task is a pointer to a user function
+//          period in units (1/clockfreq)
+// Outputs: none
+//void(*task)(void),
+void Timer0_Init(unsigned long period){
+  SYSCTL_RCGCTIMER_R |= 0x01;   // 0) activate TIMER0
+  //PeriodicTask = task;          // user function
+  //TimerCount = 0;
+  Semaphore0 = 0;
+	
+	TIMER0_CTL_R = 0x00000000;    // 1) disable TIMER0A during setup
+  TIMER0_CFG_R = 0x00000000;    // 2) configure for 32-bit mode
+  TIMER0_TAMR_R = 0x00000002;   // 3) configure for periodic mode, default down-count settings
+  TIMER0_TAILR_R = period-1;    // 4) reload value
+  TIMER0_TAPR_R = 0;            // 5) bus clock resolution
+  TIMER0_ICR_R = 0x00000001;    // 6) clear TIMER0A timeout flag
+  TIMER0_IMR_R = 0x00000001;    // 7) arm timeout interrupt
+  NVIC_PRI4_R = (NVIC_PRI4_R&0x00FFFFFF)|0x80000000; // 8) priority 4
+// interrupts enabled in the main program after all devices initialized
+// vector number 35, interrupt number 19
+  NVIC_EN0_R = 1<<19;           // 9) enable IRQ 19 in NVIC
+  TIMER0_CTL_R = 0x00000001;    // 10) enable TIMER0A
+}
+
+
+//else{dirty_array(enemy_ptr, i);}// needs to accept ptr to array and index
+		//else{dirty_array(Enemy[i], i);}//better to pass a ptr but sher look
+		// Nokia5110_PrintBMP(32, 47, PlayerShip0,0); //player[0].image[0], Enemy[1].image[FrameCount]
+
+			/*dis_buf takes a bitmap in the previously described format and puts its image data in the proper 
+// location in the buffer so the image will appear on the screen after the next call to
+*/
+
+/*
+; How to use: 
+; 1) call Random_Init once with a seed
+;     Random_Init(1);
+;     Random_Init(NVIC_CURRENT_R);
+; 2) call Random over and over to get a new random number
+;   n = Random();    // 32 bit number
+;   m = (Random()>>24)%60; // a number from 0 to 59
+
+*/
+//sbox	
+
+
+			//if(laser[i].y-LASERH <= Enemy[i].y && (Enemy[i].x+ENEMY20W) >= Enemy[i].x && laser[i].x <= laser[i].x ){ 
+				//if( (Enemy[i].x+ENEMY20W) >= Enemy[i].x && laser[i].x <= laser[i].x ) {
+				//		Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, SmallExplosion0, 0);
+
 /*		
 void dirty_array(STyp *ptr, int i){
 //void dirty_array(Struct state ptr, int i){
