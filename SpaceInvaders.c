@@ -627,7 +627,7 @@ int main(void){ int AnyLife = 1; int i;
 	
 	
 	
-	Timer0_Init(80000000/10);
+	Timer0_Init(80000000/11000);
   Timer2_Init(80000000/30);  // 30 Hz
 	while(1 && game_over == 0){
 		
