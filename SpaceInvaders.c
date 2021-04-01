@@ -115,9 +115,9 @@ signed char mis_spawn_timer=1;
 unsigned long res;
 unsigned long res3;
 unsigned long res2;
-int enemy_cnt = 20; //dynamic for level? Extra 20 enemies?
+int enemy_cnt = 6; //dynamic for level? Extra 20 enemies?
 int level;//lock to range 0:4?
-int game_over;//should init to 0
+int game_over=0;//should init to 0
 
 // *************************** Images ***************************
 // enemy ship that starts at the top of the screen (arms/mouth closed)
@@ -413,7 +413,7 @@ void Init(){
 		bool_flag = 0;		
    }
 	//this needs an overhaul
-	if (i ==0 && enemy_cnt == 0){game_over=1;}//maybe have a function to decide if player won or aliens!
+	//if (i ==0 && enemy_cnt == 0){game_over=1;}//maybe have a function to decide if player won or aliens!
 }
 
 STyp player[1];
@@ -457,12 +457,11 @@ void Init_en_laser(int source_sprite){ int i=0;int j=0;//= num_lasers++;
 	//need to make sure firing enemy has a life
 	int bool_flag = 1;//check for successful generation of laser
 	j= source_sprite;
-	
+	//WIP not sure how the lasers are being init'd when the calling sprtie is dead
 	//wip problem is dead sprites calling laser_init
-	//but random seems to always feed in 0, that's why you would sometimes see lasers init from the left
-	while (bool_flag && i<=en_max_lasers){
-		if (nlaser[i].life ==0 && Enemy[j].life >0){//wip is this wrong? no if l=0 you can overwrite
-    nlaser[i].x = (Enemy[i].x+(ENEMY10W/2));//WIP
+	while (bool_flag && i< en_max_lasers){
+		if (nlaser[i].life ==0 && Enemy[j].life ==1){//f lives=0 you can oversprite
+    nlaser[i].x = ((Enemy[j].x)+3);
     nlaser[i].y = ENEMY10H+2;
     nlaser[i].image[0] = Missile1;
 		nlaser[i].life = 1;
@@ -470,8 +469,6 @@ void Init_en_laser(int source_sprite){ int i=0;int j=0;//= num_lasers++;
 		bool_flag =0;}
 		else{
 		i++;}
-    //player[i].image[1] = BigExplosion0;
-		//player[i].image[2] = BigExplosion1;
 		}}
 //random enemy gen should say if length of enemy struct is < eg 4; generate a new enemy
 void Move(void){ int i;//wip
@@ -497,7 +494,7 @@ if(laser[i].life ==1){
 	 
 	
 	for(i=0;i <= en_num_lasers;i++){ 
-		if(nlaser[i].life >0){	
+		if(nlaser[i].life ==1){	
 	nlaser[i].y += 1;}
 }}
 void Move_ply(int i, unsigned long adc_in){ 
@@ -510,33 +507,26 @@ void Move_ply(int i, unsigned long adc_in){
 	res =res*(84-PLAYERW)/10;
 	player[0].x = res;	
 }
-	/*
-	0x00 0x3C
-	0x3C 0x78,0xB4//180
-	0xF0,12C,168//360
-	1A4,1E0,21C //540
 	
-if( res2 >= last_adc-0x1E | res2 >= last_adc+0x1E ){}
-	
-	
-	//max = 682 2AA
-	//mid =333 0x14D
-	//min=0
-	//4B IS ABOUT 60
-	switch(res2){
-    case  (>682): 5; break;   // 10 to 9
-    case  2: theNext = 5;  break;   // 9 to 5
-    //case 5: theNext = 6;  break;   // 5 to 6
-   // case 6: theNext = 10; break;   // 6 to 10
-    default: theNext = 10;
-  */
   
 
 unsigned long FrameCount=0;
-void Draw(void){ int i, j,k,L,m;
+void Draw(void){ int i, j,k,L,m,M;
   Nokia5110_ClearBuffer();
 	
-	//if(num_lasers > 0){
+	/*if (game_over==1){
+		 Nokia5110_Clear();
+  Nokia5110_SetCursor(1, 1);
+  Nokia5110_OutString("GAME OVER");
+  Nokia5110_SetCursor(1, 2);
+  Nokia5110_OutString("Well Done");
+  Nokia5110_SetCursor(1, 3);
+  Nokia5110_OutString("Earthling!");
+  Nokia5110_SetCursor(2, 4);
+  Nokia5110_OutUDec(1234);
+  Nokia5110_SetCursor(0, 0);} // renders screen} */
+	
+		//else{
 	for(i=0; i< max_lasers;i++){
 		//| laser[j].y == 50
 	if(laser[i].y == 5 ){
@@ -545,18 +535,27 @@ void Draw(void){ int i, j,k,L,m;
 				num_lasers--;}}
 	
 	if(player[0].life > 0){
-    // Nokia5110_PrintBMP(32,47, player[0].image[0], 0); //player[0].image[0], Enemy[1].image[FrameCount]
      Nokia5110_PrintBMP(player[0].x, player[0].y, player[0].image[0], 0); 
 	}  
 	//ldb possible issue with 0 length array of structs etc
 	L = num_lasers;
-	if(en_num_lasers > 0){
-		for(j=0; j< en_num_lasers;j++){
-			if (nlaser[j].life >0){
+	M = en_num_lasers;
+	j=0;
+	if(M > 0){
+		//headfuck, if enum_las = 2 you want to access laser[0] &[1]
+		//if (M==2){M=1
+		for(j=0; j<4;j++){
+			if (nlaser[j].life ==1){
 			Nokia5110_PrintBMP(nlaser[j].x, nlaser[j].y, nlaser[j].image[0], 0);}
-			if(nlaser[j].y >= 44){nlaser[j].life =0;en_num_lasers--;}
+			if(nlaser[j].y == (player[0].y-PLAYERH) && (player[0].x+8) < nlaser[j].x && (player[0].x+PLAYERW-4) > nlaser[j].x){
+			nlaser[j].life =0;
+			nlaser[j].y=0;
+			player[0].life--;	
+			en_num_lasers--;}
 	}}
-	//td this should enumerate through all elements of enemy arr
+//	&& (Enemy[i].x+ENEMY20W) > laser[k].x && laser[k].x > Enemy[i].x
+	//if(laser[k].life ==1 && laser[k].y-LASERH == Enemy[i].y-1 && (Enemy[i].x+ENEMY20W) > laser[k].x &
+	
 	// else statement that catches lives = 0 should trigger deletion
 	for(i=0;i<=max_enemies;i++){
     //if sprite is alive, check to see if a laser is about to collide
@@ -572,10 +571,10 @@ void Draw(void){ int i, j,k,L,m;
 			if(laser[k].life ==1 && laser[k].y-LASERH == Enemy[i].y-1 && (Enemy[i].x+ENEMY20W) > laser[k].x && laser[k].x > Enemy[i].x ){
 				Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, SmallExplosion0, 0);
 				Enemy[i].life=0;
-			
+				enemy_cnt--;
 				laser[k].life=0;
 				laser[k].y=0;
-				num_lasers--;}//red could be combined w max_lasers
+				num_lasers--;}
 			
 			//still in for loop cycling through all enemies and lasers	
 			else{Nokia5110_PrintBMP(Enemy[i].x, Enemy[i].y, Enemy[i].image[FrameCount], 0);
@@ -583,11 +582,8 @@ void Draw(void){ int i, j,k,L,m;
   }	
 		m=0;
 		for(m=0; m <= L;m++){
-			//cnt =laser[j].life;
 			if (laser[m].life ==1){
 			Nokia5110_PrintBMP(laser[m].x, laser[m].y, laser[m].image[0], 0);}
-			//unsure if these numbers are the problem
-				//if (num_lasers>0) {num_lasers--;}
 			}
 	
   Nokia5110_DisplayBuffer();      // draw buffer
@@ -598,6 +594,7 @@ DAC output should be done in Timer0A_Handler()look at Lab13, where sound
 is generated using SysTick timer. Will be similar, but now using Timer0A.*/
 
 
+//last major thing is enemy laser collisions
 int main(void){ int AnyLife = 1; int i;
   PortBEF_Init();
 	TExaS_Init(NoLCD_NoScope);  // set system clock to 80 MHz
@@ -632,8 +629,9 @@ int main(void){ int AnyLife = 1; int i;
 	
 	Timer0_Init(80000000/10);
   Timer2_Init(80000000/30);  // 30 Hz
-	while(1){
+	while(1 && game_over == 0){
 		
+		Delay100ms(1);
 		while(Semaphore == 0){};//it just stalls here, notice the bracket
 		//Sem changes to 1, proceed but the first thing you do is reset the semaphore	
     Semaphore = 0; // runs at 30 Hz	
@@ -643,7 +641,6 @@ int main(void){ int AnyLife = 1; int i;
 		if (but_prs==1){
 			Init_laser();}
 		but_prs=0;
-		Delay100ms(1);
 		Draw();
 		
 		//Move_ply(1,4096);//wip get rid of this and swap control fully to adc or use for default
@@ -652,34 +649,29 @@ int main(void){ int AnyLife = 1; int i;
     Move_laser(0);
 		
 		//AnyLife = 0;
-		//Semaphore =1;
-	
-			
-			
-	}
-	
-  while(AnyLife){
-    while(Semaphore == 0){};
-    Semaphore = 0; // runs at 30 Hz
-    AnyLife = 0;
 		Semaphore =1;
-    for(i=0; i<4 ; i++){
-      AnyLife |= Enemy[i].life;
-    }
-    Draw();
-  }
+		if (enemy_cnt==4 || player[0].life ==2){game_over =1;}
+	}
+  
   Nokia5110_Clear();
   Nokia5110_SetCursor(1, 1);
-  Nokia5110_OutString("GAME OVER");
+  Nokia5110_OutString("Fin de Jeu");
   Nokia5110_SetCursor(1, 2);
-  Nokia5110_OutString("Nice try,");
-  Nokia5110_SetCursor(1, 3);
-  Nokia5110_OutString("Earthling!");
-  Nokia5110_SetCursor(2, 4);
-  Nokia5110_OutUDec(1234);
-  Nokia5110_SetCursor(0, 0); // renders screen
-  while(1){
-		Draw();
+  if(player[0].life == 0){
+		Nokia5110_OutString("Tu ne pouvais");
+		Nokia5110_SetCursor(1, 3);
+		Nokia5110_OutString("Pas Nous Proteger");}
+	else{
+		Nokia5110_OutString("Bien Joue^");
+		Nokia5110_SetCursor(1, 3);
+		Nokia5110_OutString("Nous Sommes en securite");
+		//Nokia5110_SetCursor(2, 4);
+  Nokia5110_SetCursor(0, 0);} // renders screen
+  Delay100ms(50);
+	
+	while(1){
+		//Draw();
+		Delay100ms(5);
   }
 
 }
@@ -708,33 +700,36 @@ void Timer2_Init(unsigned long period){
 void Timer2A_Handler(void){ 
   TIMER2_ICR_R = 0x00000001;   // acknowledge timer2A timeout
   TimerCount++;
-	//int cur;
 //remember the button could be checked multiple times for every time draw is called
-  //Move(); //should all move functions be called here?
-
 	ADCdata = ADC0_In();
 	Move_ply(0, ADCdata);
 	Random_Init(ADCdata);
 	if (GPIO_PORTE_DATA_R&0x01){
-but_prs=1;}
-	//Init_laser();}
+		but_prs=1;}
+
 	spawn_timer++;
-	if (spawn_timer==10){//change to 255 after debug
+	//time_change req
+	if (spawn_timer==255 && enemy_cnt !=0){//change to 255 after debug
 			Init();}
 	if (spawn_timer==85 | spawn_timer==170){//change to 255 after debug
-		//wip, variable to hold number of live enemies would be good
 			Init_en_laser(Random_i(max_enemies));}//randomise the enemy firing it
 		//td  every 3 seconds fire a missile? every 7 spawn an enemy if there is space 	
 	
 	Semaphore = 1; // trigger
 }
 
+
+// could use function pointers/callbacks, would be good practice
+//void (*PeriodicTask)(void);   // user function
 void Timer0A_Handler(void){
+	  TIMER0_ICR_R = 0x00000001;   // acknowledge timer0A timeout
 	//if (GPIO_PORTE_DATA_R&0x01){
 	//but_prs =1;}
 	//else{but_prs=0;}
 	//Init_laser();}
-  TIMER0_ICR_R = TIMER_ICR_TATOCINT;// acknowledge TIMER0A timeout
+	 TIMER0_ICR_R = TIMER_ICR_TATOCINT;
+	//debatable if this is best way to do it, this timer interrupts less frequently than 2
+	// acknowledge TIMER0A timeout
   //(*PeriodicTask)();                // execute user task
 }
 	
@@ -775,6 +770,7 @@ int round2(double number)
 
 
 
+ 
 // ***************** Timer0_Init ****************
 // Activate TIMER0 interrupts to run user task periodically
 // Inputs:  task is a pointer to a user function
@@ -782,11 +778,12 @@ int round2(double number)
 // Outputs: none
 //void(*task)(void),
 void Timer0_Init(unsigned long period){
+	unsigned long volatile delay;
   SYSCTL_RCGCTIMER_R |= 0x01;   // 0) activate TIMER0
-  //PeriodicTask = task;          // user function
+  delay = SYSCTL_RCGCTIMER_R;
+	//PeriodicTask = task;          // user function
   //TimerCount = 0;
   Semaphore0 = 0;
-	
 	TIMER0_CTL_R = 0x00000000;    // 1) disable TIMER0A during setup
   TIMER0_CFG_R = 0x00000000;    // 2) configure for 32-bit mode
   TIMER0_TAMR_R = 0x00000002;   // 3) configure for periodic mode, default down-count settings
@@ -834,3 +831,36 @@ void dirty_array(STyp *ptr, int i){
 	i++;
 }}*/
 //	spawn_timer = (spawn_timer++)&0xFF;//maybe query why this didn't work on forum
+
+/*
+	0x00 0x3C
+	0x3C 0x78,0xB4//180
+	0xF0,12C,168//360
+	1A4,1E0,21C //540
+	
+if( res2 >= last_adc-0x1E | res2 >= last_adc+0x1E ){}
+	
+	
+	//max = 682 2AA
+	//mid =333 0x14D
+	//min=0
+	//4B IS ABOUT 60
+	switch(res2){
+    case  (>682): 5; break;   // 10 to 9
+    case  2: theNext = 5;  break;   // 9 to 5
+    //case 5: theNext = 6;  break;   // 5 to 6
+   // case 6: theNext = 10; break;   // 6 to 10
+    default: theNext = 10;
+ 
+
+while(AnyLife){
+    while(Semaphore == 0){};
+    Semaphore = 0; // runs at 30 Hz
+    AnyLife = 0;
+		Semaphore =1;
+    for(i=0; i<4 ; i++){
+      AnyLife |= Enemy[i].life;
+    }
+    Draw();
+  }
+*/
