@@ -7,7 +7,7 @@
 // November 19, 2012
 
 #include "DAC.h"
-#include "Timer0.h"
+//#include "Timer0.h"
 #include "..//tm4c123gh6pm.h"
 #include "Sound.h"
 
@@ -1140,9 +1140,11 @@ const unsigned char highpitch[1802] = {
   67, 119, 148, 166, 164, 238, 223, 202, 174, 112, 96, 78, 0, 34, 54, 99, 143, 160, 166, 183, 
   250, 207};
 
-unsigned long Index = 0;
-const unsigned char *Wave;
-unsigned long Count = 0;
+//unsigned long Index = 0;
+//const unsigned char *Wave;
+//unsigned long Count = 0;
+
+/*	
 void Play(void){
   if(Count){
     DAC_Out(Wave[Index]>>4);
@@ -1151,9 +1153,9 @@ void Play(void){
   }else{
   NVIC_DIS0_R = 1<<19;           // disable IRQ 19 in NVIC
   }
-}
+}	
 void Sound_Init(void){
-  DAC_Init(8);               // initialize simple 4-bit DAC
+  DAC_Init();               // initialize simple 4-bit DAC
 //  Timer0B_Init(&Play, 20000); // 4 kHz
   Timer0_Init(&Play, 80000000/11025);     // 11.025 kHz
   Index = 0;
@@ -1162,6 +1164,10 @@ void Sound_Init(void){
 //     DAC_Out(2048);
 //   }
 }
+*/
+
+/*
+
 void Sound_Play(const unsigned char *pt, unsigned long count){
   Wave = pt;
   Index = 0;
@@ -1193,3 +1199,4 @@ void Sound_Fastinvader4(void){
 void Sound_Highpitch(void){
   Sound_Play(highpitch,1802);
 }
+*/
