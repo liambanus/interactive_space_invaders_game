@@ -8,6 +8,7 @@
 
 #include "DAC.h"
 #include "Timer0.h"
+#include "..//tm4c123gh6pm.h"
 #include "Sound.h"
 
 const unsigned char shoot[4080] = {

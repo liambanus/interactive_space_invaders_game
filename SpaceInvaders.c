@@ -55,6 +55,10 @@
 #include "Random.h"
 #include "TExaS.h"
 #include "ADC.h"
+#include "DAC.h"
+#include "Sound.h"
+//#include "Timer0.h"
+//const unsigned char explosion[2000] = {
 
 
 void PortBEF_Init(void){ volatile unsigned long delay;
@@ -94,10 +98,19 @@ void EnableInterrupts(void);  // Enable interrupts
 void Timer2_Init(unsigned long period);
 void Timer0_Init(unsigned long period);
 void Delay100ms(unsigned long count); // time delay in 0.1 seconds
+void Sound_Play(const unsigned char *pt, unsigned long count);
+void Timer2A_Start(void);
+void Timer2A_Stop(void);
+
+
 unsigned long TimerCount;
 unsigned long Semaphore;
 unsigned long Semaphore0;
 
+
+unsigned long Index = 0;    // index into array
+const unsigned char *Wave;  // pointer to array
+unsigned long Count_dac = 0;    // number of points (0 means no sound)
 int but_prs=0;
 unsigned long A = (1024*4000)/4095;
 void Move_ply(int i, unsigned long adc_in);
@@ -547,12 +560,12 @@ void Draw(void){ int i, j,k,L,m,M;
 		for(j=0; j<4;j++){
 			if (nlaser[j].life ==1){
 			Nokia5110_PrintBMP(nlaser[j].x, nlaser[j].y, nlaser[j].image[0], 0);}
-			if(nlaser[j].y == (player[0].y-PLAYERH) && (player[0].x+8) < nlaser[j].x && (player[0].x+PLAYERW-4) > nlaser[j].x){
+			if(nlaser[j].y == (player[0].y-PLAYERH) && (player[0].x+1) < nlaser[j].x && (player[0].x+PLAYERW-4) > nlaser[j].x){
 			nlaser[j].life =0;
 			nlaser[j].y=0;
 			player[0].life--;	
-			en_num_lasers--;}
-	}}
+			en_num_lasers--;}	
+			else if (nlaser[j].y ==0x32){ nlaser[j].life=0;nlaser[j].y=0; en_num_lasers--;}}}
 //	&& (Enemy[i].x+ENEMY20W) > laser[k].x && laser[k].x > Enemy[i].x
 	//if(laser[k].life ==1 && laser[k].y-LASERH == Enemy[i].y-1 && (Enemy[i].x+ENEMY20W) > laser[k].x &
 	
@@ -627,7 +640,7 @@ int main(void){ int AnyLife = 1; int i;
 	
 	
 	
-	Timer0_Init(80000000/11000);
+	Timer0_Init(80000000/30);
   Timer2_Init(80000000/30);  // 30 Hz
 	while(1 && game_over == 0){
 		
@@ -650,7 +663,7 @@ int main(void){ int AnyLife = 1; int i;
 		
 		//AnyLife = 0;
 		Semaphore =1;
-		if (enemy_cnt==4 || player[0].life ==2){game_over =1;}
+		if (enemy_cnt==0 || player[0].life ==0){game_over =1;}
 	}
   
   Nokia5110_Clear();
@@ -664,7 +677,7 @@ int main(void){ int AnyLife = 1; int i;
 	else{
 		Nokia5110_OutString("Bien Joue^");
 		Nokia5110_SetCursor(1, 3);
-		Nokia5110_OutString("Nous Sommes en securite");
+		Nokia5110_OutString("Nous Sommes en securite!");
 		//Nokia5110_SetCursor(2, 4);
   Nokia5110_SetCursor(0, 0);} // renders screen
   Delay100ms(50);
@@ -700,21 +713,17 @@ void Timer2_Init(unsigned long period){
 void Timer2A_Handler(void){ 
   TIMER2_ICR_R = 0x00000001;   // acknowledge timer2A timeout
   TimerCount++;
-//remember the button could be checked multiple times for every time draw is called
-	ADCdata = ADC0_In();
-	Move_ply(0, ADCdata);
-	Random_Init(ADCdata);
-	if (GPIO_PORTE_DATA_R&0x01){
-		but_prs=1;}
-
-	spawn_timer++;
-	//time_change req
-	if (spawn_timer==255 && enemy_cnt !=0){//change to 255 after debug
-			Init();}
-	if (spawn_timer==85 | spawn_timer==170){//change to 255 after debug
-			Init_en_laser(Random_i(max_enemies));}//randomise the enemy firing it
-		//td  every 3 seconds fire a missile? every 7 spawn an enemy if there is space 	
+	TIMER2_ICR_R = 0x00000001;  // acknowledge
+  if(Count_dac){
+    DAC_Out(Wave[Index]>>4); 
+    Index = Index + 1;
+    Count_dac = Count_dac - 1;
+  }else{
+    Timer2A_Stop();
+  }
 	
+//remember the button could be checked multiple times for every time draw is called
+
 	Semaphore = 1; // trigger
 }
 
@@ -727,12 +736,47 @@ void Timer0A_Handler(void){
 	//but_prs =1;}
 	//else{but_prs=0;}
 	//Init_laser();}
-	 TIMER0_ICR_R = TIMER_ICR_TATOCINT;
+	 //TIMER0_ICR_R = TIMER_ICR_TATOCINT;
 	//debatable if this is best way to do it, this timer interrupts less frequently than 2
 	// acknowledge TIMER0A timeout
   //(*PeriodicTask)();                // execute user task
+	ADCdata = ADC0_In();
+	Move_ply(0, ADCdata);
+	Random_Init(ADCdata);
+	
+	//better to have this be size of array being passed but you don't know?
+	Sound_Play(explosion, 2000);
+	
+	if (GPIO_PORTE_DATA_R&0x01){
+		but_prs=1;}
+
+	spawn_timer++;
+	//time_change req
+	if (spawn_timer==255 && enemy_cnt !=0){//change to 255 after debug
+			Init();}
+	if (spawn_timer==85 | spawn_timer==170){//change to 255 after debug
+			Init_en_laser(Random_i(max_enemies));}//randomise the enemy firing it
+		//td  every 3 seconds fire a missile? every 7 spawn an enemy if there is space 	
+	Semaphore = 1;
+
 }
 	
+
+void Sound_Play(const unsigned char *pt, unsigned long count){
+  Wave = pt;
+  Index = 0;
+  Count_dac = count;
+  Timer2A_Start();
+}
+
+// For one of the timers you want it on constantly, other only to play sounds
+void Timer2A_Start(void){
+  TIMER2_CTL_R |= 0x00000001;   // enable
+}
+
+void Timer2A_Stop(void){
+  TIMER2_CTL_R &= ~0x00000001; // disable
+}
 
 int Random_i(int i){
 	return ((Random()>>24)%i);}
@@ -754,9 +798,7 @@ void Delay100ms(unsigned long count){unsigned long volatile time;
 unsigned long Convert(unsigned long sample){
 	//might be a case of preserving working with ints w/ >>
 	//4000/4095, 0x44=68 so ship width =4
-	
 	 sample=(A*ADCdata>>10)+1;
-	
 	//sample = (sample/1000);
   return sample;  // replace this line with real code
 }

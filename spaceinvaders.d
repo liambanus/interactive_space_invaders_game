@@ -4,3 +4,5 @@
 .\spaceinvaders.o: Random.h
 .\spaceinvaders.o: TExaS.h
 .\spaceinvaders.o: ADC.h
+.\spaceinvaders.o: DAC.h
+.\spaceinvaders.o: Sound.h
